@@ -10,3 +10,39 @@ pub fn parse_hexa_value(input: &Value) -> Result<u64> {
         16,
     )?)
 }
+
+
+pub enum DisplayType {
+    SingleLine,
+    DoubleLine,
+}
+
+pub fn display_pretty_block(lines: Vec<String>, display: DisplayType) -> Result<()> {
+
+    let mut l: usize = 0;
+
+    for line in lines.iter() {
+        l = usize::max(line.len(), l);
+    }
+    
+    let first_line = match display {
+        DisplayType::DoubleLine => format!("╔{}╗", "═".repeat(l)),
+        DisplayType::SingleLine => format!("┌{}┐", "─".repeat(l)),
+    };
+
+    println!("{}", first_line);
+    for line in lines {
+        let line = match display {
+            DisplayType::DoubleLine => format!("║{}{}║", line, " ".repeat(l-line.len())),
+            DisplayType::SingleLine => format!("│{}{}│", line, " ".repeat(l-line.len())),
+        };
+        println!("{}", line);
+    }
+    let last_line = match display {
+        DisplayType::DoubleLine => format!("╚{}╝", "═".repeat(l)),
+        DisplayType::SingleLine => format!("└{}┘", "─".repeat(l)),
+    };
+    println!("{}", last_line);
+
+    Ok(())
+}

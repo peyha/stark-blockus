@@ -1,5 +1,5 @@
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Value, Number};
 use reqwest::Client;
 use std::collections::HashMap;
 use anyhow::Result;
@@ -75,6 +75,7 @@ pub async fn get_block(url: String, block_id: u64) -> Result<Vec<String>> {
         .text()
         .await?;
     let data: Value = serde_json::from_str(res.as_str())?;
+    println!("{}", data);
     let block_info = data.get("result").unwrap();
 
     // block info
@@ -130,7 +131,7 @@ pub async fn get_block(url: String, block_id: u64) -> Result<Vec<String>> {
     let mut type_version_count: HashMap<(String, u64), u64> = HashMap::new();
     for tx in txs {
         // TODO decode tx according to version
-        let max_fee: i32 = parse_hexa_value(tx.get("max_fee").unwrap()).unwrap() as i32;
+        let max_fee: i32 = parse_hexa_value(tx.get("max_fee").unwrap_or(&Value::Number(Number::from(0)))).unwrap_or(0) as i32 ;
         min_fee = i32::min(min_fee, max_fee);
         max_seen_fee = i32::max(max_seen_fee, max_fee);
         avg_fee += (max_fee as f64) / (nb_txs as f64);
