@@ -33,7 +33,13 @@ struct GetBlockRequest{
     id: &'static str
 }
 
-pub async fn get_block_number(url: String) -> Result<u64> {
+enum BlockNumberFetchErr {
+    RequestFail(reqwest::Error),
+    ConversionFail(serde_json::Error),
+    NumberConvertFail(),
+}
+
+pub async fn get_block_number(url: String) -> Result<u64, BlockNumberFetchErr> {
 
     let request = GetBlockNumberRequest {
         params: (),
@@ -45,12 +51,19 @@ pub async fn get_block_number(url: String) -> Result<u64> {
     let res = client.post(url)
         .json(&request)
         .send()
-        .await?
+        .await
+        .map_err(BlockNumberFetchErr::RequestFail)?
         .text()
-        .await?;
-    let data: Value = serde_json::from_str(res.as_str())?;
+        .await
+        .map_err(BlockNumberFetchErr::RequestFail)?;
+
+    let data: Value = serde_json::from_str(res.as_str()).map_err(BlockNumberFetchErr::ConversionFail)?;
     
-    Ok(data["result"].as_number().unwrap().as_u64().unwrap())
+    Ok(data["result"].as_number().ok_or(BlockNumberFetchErr::NumberConvertFail())?.as_u64().ok_or(BlockNumberFetchErr::NumberConvertFail())?)
+}
+
+enum BlockFetchErr{
+    
 }
 
 pub async fn get_block(url: String, block_id: u64) -> Result<Vec<String>> {
