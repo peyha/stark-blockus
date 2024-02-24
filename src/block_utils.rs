@@ -33,7 +33,8 @@ struct GetBlockRequest{
     id: &'static str
 }
 
-enum BlockNumberFetchErr {
+#[derive(Debug)]
+pub enum BlockNumberFetchErr {
     RequestFail(reqwest::Error),
     ConversionFail(serde_json::Error),
     NumberConvertFail(),
@@ -62,7 +63,7 @@ pub async fn get_block_number(url: String) -> Result<u64, BlockNumberFetchErr> {
     Ok(data["result"].as_number().ok_or(BlockNumberFetchErr::NumberConvertFail())?.as_u64().ok_or(BlockNumberFetchErr::NumberConvertFail())?)
 }
 
-enum BlockFetchErr{
+pub enum BlockFetchErr{
     
 }
 
