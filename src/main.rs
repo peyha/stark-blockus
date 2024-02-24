@@ -25,7 +25,8 @@ async fn main() {
         if cur_block_number != block_number {
             match get_block(args.rpc.clone(), block_number).await {
                 Ok(lines) => {
-                    if let Result::Err(e) = display_pretty_block(lines, DisplayType::SingleLine) {
+                    let line_type = if block_number % 2 == 0 { DisplayType::DoubleLine } else { DisplayType::SingleLine };
+                    if let Result::Err(e) = display_pretty_block(lines, line_type) {
                         println!("Block display error on block {}: {:?}", block_number, e)
                     };
                     cur_block_number = block_number;
