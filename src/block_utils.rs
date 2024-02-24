@@ -104,7 +104,7 @@ pub async fn get_block(url: String, block_id: u64) -> Result<Vec<String>, BlockF
         .map_err(BlockFetchErr::RequestFail)?;
 
     let data: Value = serde_json::from_str(res.as_str()).map_err(BlockFetchErr::ConversionFail)?;
-    let block_info = data.get("result").unwrap();
+    let block_info = data.get("result").ok_or(BlockFetchErr::IndexError("result".to_string()))?;
 
     // block info
 
