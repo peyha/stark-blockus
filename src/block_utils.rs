@@ -2,6 +2,7 @@ use serde::Serialize;
 use serde_json::{Value, Number};
 use reqwest::Client;
 use std::collections::HashMap;
+use std::num::ParseIntError;
 use anyhow::Result;
 
 use crate::utils::parse_hexa_value;
@@ -63,11 +64,16 @@ pub async fn get_block_number(url: String) -> Result<u64, BlockNumberFetchErr> {
     Ok(data["result"].as_number().ok_or(BlockNumberFetchErr::NumberConvertFail())?.as_u64().ok_or(BlockNumberFetchErr::NumberConvertFail())?)
 }
 
+#[derive(Debug)]
 pub enum BlockFetchErr{
-    
+    RequestFail(reqwest::Error),
+    ConversionFail(serde_json::Error),
+    NumberConvertFail(String),
+    IntConvertFail(ParseIntError),
+    IndexError(String),
 }
 
-pub async fn get_block(url: String, block_id: u64) -> Result<Vec<String>> {
+pub async fn get_block(url: String, block_id: u64) -> Result<Vec<String>, BlockFetchErr> {
     let mut lines = Vec::new();
 
     let request = GetBlockRequest {
@@ -85,60 +91,99 @@ pub async fn get_block(url: String, block_id: u64) -> Result<Vec<String>> {
     let res = client.post(url)
         .json(&request)
         .send()
-        .await?
+        .await
+        .map_err(BlockFetchErr::RequestFail)?
         .text()
-        .await?;
-    let data: Value = serde_json::from_str(res.as_str())?;
-    println!("{}", data);
+        .await
+        .map_err(BlockFetchErr::RequestFail)?;
+
+    let data: Value = serde_json::from_str(res.as_str()).map_err(BlockFetchErr::ConversionFail)?;
     let block_info = data.get("result").unwrap();
 
     // block info
     
-    let block_number = block_info.get("block_number").unwrap().as_number().unwrap();
+    let block_number = block_info
+        .get("block_number")
+        .ok_or(BlockFetchErr::IndexError("block_number".to_string()))?
+        .as_number()
+        .ok_or(BlockFetchErr::NumberConvertFail("block_number".to_string()))?;
+
     lines.push(
         format!("Block number: {}", block_number)
     );
 
-    let timestamp = block_info.get("timestamp").unwrap().as_number().unwrap();
+    let timestamp = block_info.get("timestamp")
+        .ok_or(BlockFetchErr::IndexError("timestamp".to_string()))?
+        .as_number()
+        .ok_or(BlockFetchErr::NumberConvertFail("timestamp".to_string()))?;
+
     lines.push(
         format!("Timestamp: {}", timestamp)
     ); // TODO format date
 
-    let block_hash = block_info.get("block_hash").unwrap().as_str().unwrap();
+    let block_hash = block_info.get("block_hash")
+        .ok_or(BlockFetchErr::IndexError("block_hash".to_string()))?
+        .as_str()
+        .ok_or(BlockFetchErr::IndexError("block_hash".to_string()))?;
+
     lines.push(
         format!("Block hash: {}", block_hash)
     );
 
-    let parent_hash = block_info.get("parent_hash").unwrap().as_str().unwrap();
+    let parent_hash = block_info.get("parent_hash")
+        .ok_or(BlockFetchErr::IndexError("parent_hash".to_string()))?
+        .as_str()
+        .ok_or(BlockFetchErr::IndexError("parent_hash".to_string()))?;
     lines.push(
         format!("Parent hash: {}", parent_hash)
     );
 
-    let starknet_version = block_info.get("starknet_version").unwrap().as_str().unwrap();
+    let starknet_version = block_info.get("starknet_version")
+        .ok_or(BlockFetchErr::IndexError("starknet_version".to_string()))?
+        .as_str()
+        .ok_or(BlockFetchErr::IndexError("starknet_version".to_string()))?;
+
     lines.push(
         format!("Starknet version: {}", starknet_version)
     );
 
-    let status = block_info.get("status").unwrap().as_str().unwrap();
+    let status = block_info.get("status")
+        .ok_or(BlockFetchErr::IndexError("status".to_string()))?
+        .as_str()
+        .ok_or(BlockFetchErr::IndexError("status".to_string()))?;
+
     lines.push(
         format!("Block status: {}", status)
     );
 
-    let sequencer_address = block_info.get("sequencer_address").unwrap().as_str().unwrap();
+    let sequencer_address = block_info.get("sequencer_address")
+        .ok_or(BlockFetchErr::IndexError("sequencer_address".to_string()))?
+        .as_str()
+        .ok_or(BlockFetchErr::IndexError("sequencer_address".to_string()))?;
+
     lines.push(
         format!("Sequencer address on mainnet is {}", sequencer_address)
     );
-    let new_root = block_info.get("new_root").unwrap().as_str().unwrap();
+    let new_root = block_info.get("new_root")
+        .ok_or(BlockFetchErr::IndexError("new_root".to_string()))?
+        .as_str()
+        .ok_or(BlockFetchErr::IndexError("new_root".to_string()))?;
     lines.push(
         format!("New root is {}", new_root)
     );
 
-    let l1_gas_price =  parse_hexa_value(block_info.get("l1_gas_price").unwrap().get("price_in_wei").unwrap()).unwrap() as f64 / 1e9;
+    let l1_gas_price =  parse_hexa_value(
+        block_info.get("l1_gas_price").unwrap_or(&Value::Number(Number::from(0))).get("price_in_wei").unwrap_or(&Value::Number(Number::from(0)))
+    )? as f64 / 1e9;
     lines.push(
         format!("L1 gas price is {:.2}", l1_gas_price)
     );
 
-    let txs = block_info.get("transactions").unwrap().as_array().unwrap();
+    let txs = block_info.get("transactions")
+        .ok_or(BlockFetchErr::IndexError("transactions".to_string()))?
+        .as_array()
+        .ok_or(BlockFetchErr::IndexError("transactions".to_string()))?;
+    
     let nb_txs = txs.len() as u64;
     let mut tx_version_count: HashMap<String, u64> = HashMap::new();
     let (mut min_fee, mut max_seen_fee, mut avg_fee) = (i32::MAX, i32::MIN, 0 as f64);
@@ -150,21 +195,26 @@ pub async fn get_block(url: String, block_id: u64) -> Result<Vec<String>> {
         max_seen_fee = i32::max(max_seen_fee, max_fee);
         avg_fee += (max_fee as f64) / (nb_txs as f64);
         
-        let tx_type = tx.get("type").unwrap().as_str();
+        let tx_type = tx.get("type").ok_or(BlockFetchErr::IndexError("type".to_string()))?.as_str().ok_or(BlockFetchErr::IndexError("type".to_string()))?;
         
-        if !tx_version_count.contains_key(&tx_type.unwrap().to_string()){
-            tx_version_count.insert(tx_type.unwrap().to_string(), 0);
+        if !tx_version_count.contains_key(&tx_type.to_string()){
+            tx_version_count.insert(tx_type.to_string(), 0);
         }
-        let cur_version_count = tx_version_count.get(&tx_type.unwrap().to_string()).unwrap();
-        tx_version_count.insert(tx_type.unwrap().to_string(), cur_version_count + 1);
+        let cur_version_count = tx_version_count.get(&tx_type.to_string())
+            .ok_or(BlockFetchErr::IndexError("type".to_string()))?;
+        tx_version_count.insert(tx_type.to_string(), cur_version_count + 1);
 
-        let version = parse_hexa_value(tx.get("version").unwrap()).unwrap();
+        let version = parse_hexa_value(
+            tx.get("version")
+                .ok_or(BlockFetchErr::IndexError("version".to_string()))?
+        )? as u64;
         
-        if !type_version_count.contains_key(&(tx_type.unwrap().to_string(), version)){
-            type_version_count.insert((tx_type.unwrap().to_string(), version), 0);
+        if !type_version_count.contains_key(&(tx_type.to_string(), version)){
+            type_version_count.insert((tx_type.to_string(), version), 0);
         }
-        let cur_count = type_version_count.get(&(tx_type.unwrap().to_string(), version)).unwrap();
-        type_version_count.insert((tx_type.unwrap().to_string(), version), cur_count + 1);
+        let cur_count = type_version_count.get(&(tx_type.to_string(), version))
+            .ok_or(BlockFetchErr::IndexError("type".to_string()))?;
+        type_version_count.insert((tx_type.to_string(), version), cur_count + 1);
     }
 
     lines.push(

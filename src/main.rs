@@ -32,12 +32,12 @@ async fn main() {
             match get_block(args.rpc.clone(), block_number).await {
                 Ok(lines) => {
                     if let Result::Err(e) = display_pretty_block(lines, DisplayType::SingleLine) {
-                        println!("Block display error on block {}: {}", block_number, e)
+                        println!("Block display error on block {}: {:?}", block_number, e)
                     };
                     cur_block_number = block_number;
                 },
                 Err(e) => {
-                    println!("Block retrieval error on block {}: {}", block_number, e);
+                    println!("Block retrieval error on block {}: {:?}", block_number, e);
                 }
             };
 

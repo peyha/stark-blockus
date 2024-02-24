@@ -1,14 +1,16 @@
 use serde_json::Value;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+use crate::block_utils::BlockFetchErr;
+
 // Parse a serde Value which should represent a hexadecimal value to a int
-pub fn parse_hexa_value(input: &Value) -> Result<u64> {
+pub fn parse_hexa_value(input: &Value) -> Result<u64, BlockFetchErr> {
     Ok(u64::from_str_radix(
         input
             .as_str()
-            .ok_or(anyhow!("hexa fail"))?
+            .ok_or(BlockFetchErr::NumberConvertFail(format!("{} from hexa", input)))?
             .trim_start_matches("0x"),
         16,
-    )?)
+    ).map_err(BlockFetchErr::IntConvertFail)?)
 }
 
 
